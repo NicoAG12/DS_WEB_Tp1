@@ -11,14 +11,16 @@ export class StockMovementsController {
   @Post()
   @Roles('ADMIN', 'VENDEDOR')
   create(@Body() createStockMovementDto: CreateStockMovementDto, @Req() req: any) {
-    const userRole = req.user.role.toUpperCase();
     const userId = req.user.id;
 
-    if (createStockMovementDto.type === 'COMPRA' && userRole !== 'ADMIN') {
-      throw new ForbiddenException('Los vendedores no pueden registrar compras de inventario.');
-    }
-
     return this.stockMovementsService.create(createStockMovementDto, userId);
+  }
+
+  @Post('batch')
+  @Roles('ADMIN', 'VENDEDOR')
+  createBatch(@Body() createStockMovementDtos: CreateStockMovementDto[], @Req() req: any) {
+    const userId = req.user.id;
+    return this.stockMovementsService.createBatch(createStockMovementDtos, userId);
   }
 
   @Get('traceability')

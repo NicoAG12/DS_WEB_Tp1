@@ -50,6 +50,10 @@ export class StockMovementsService {
         data: { currentStock: newStock },
       });
 
+      // Calcular precios
+      const unitPrice = type === 'COMPRA' ? product.purchasePrice : product.salePrice;
+      const totalPrice = unitPrice * quantity;
+
       // 2. Registrar el movimiento para trazabilidad
       const movement = await tx.stockMovement.create({
         data: {
@@ -58,6 +62,8 @@ export class StockMovementsService {
           clientName,
           productId,
           userId,
+          unitPrice,
+          totalPrice,
         },
         include: { user: true, product: true },
       });
@@ -69,7 +75,67 @@ export class StockMovementsService {
         );
       }
 
-      return movement;
+    });
+  }
+
+  async createBatch(createStockMovementDtos: CreateStockMovementDto[], userId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      await this.prisma.user.upsert({
+        where: { id: userId },
+        create: { id: userId, username: `mockuser_${userId}`, role: 'ADMIN' },
+        update: {},
+      });
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      const movements: any[] = [];
+      for (const dto of createStockMovementDtos) {
+        const { productId, type, quantity, clientName } = dto;
+        const product = await tx.product.findUnique({ where: { id: productId } });
+
+        if (!product) {
+          throw new NotFoundException(`Producto con ID ${productId} no encontrado.`);
+        }
+
+        let newStock = product.currentStock;
+        if (type === 'COMPRA' || type === 'DEVOLUCION') {
+          newStock += quantity;
+        } else if (type === 'VENTA') {
+          if (newStock < quantity) {
+            throw new BadRequestException(`Stock insuficiente para vender ${product.description}.`);
+          }
+          newStock -= quantity;
+        }
+
+        await tx.product.update({
+          where: { id: productId },
+          data: { currentStock: newStock },
+        });
+
+        const unitPrice = type === 'COMPRA' ? product.purchasePrice : product.salePrice;
+        const totalPrice = unitPrice * quantity;
+
+        const movement = await tx.stockMovement.create({
+          data: {
+            type,
+            quantity,
+            clientName,
+            productId,
+            userId,
+            unitPrice,
+            totalPrice,
+          },
+          include: { user: true, product: true },
+        });
+
+        if (type === 'VENTA' && newStock <= product.criticalStockLevel) {
+          this.logger.warn(`ALERTA DE STOCK: ${product.description} en nivel crítico (${newStock}).`);
+        }
+
+        movements.push(movement);
+      }
+      return movements;
     });
   }
 

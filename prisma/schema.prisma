@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id       Int     @id @default(autoincrement())
+  username String  @unique
+  role     String  @default("VENDEDOR") // ADMIN o VENDEDOR
+  
+  movements StockMovement[]
+}
+
+model Product {
+  id                 Int     @id @default(autoincrement())
+  sku                String  @unique
+  description        String
+  category           String  // HOGAR, VIAJE, ROPA, BELLEZA, TECNOLOGIA
+  purchasePrice      Float
+  salePrice          Float
+  currentStock       Int     @default(0)
+  criticalStockLevel Int     @default(10)
+
+  movements StockMovement[]
+}
+
+model StockMovement {
+  id         Int      @id @default(autoincrement())
+  type       String   // COMPRA, VENTA, DEVOLUCION
+  quantity   Int
+  clientName String?  // Opcional
+  createdAt  DateTime @default(now())
+
+  product    Product  @relation(fields: [productId], references: [id])
+  productId  Int
+
+  user       User     @relation(fields: [userId], references: [id])
+  userId     Int
+}
